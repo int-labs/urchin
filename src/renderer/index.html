@@ -58,6 +58,15 @@
       <div id="transcript" class="transcript"><em>Nothing yet.</em></div>
     </section>
 
+    <div id="netlost" class="overlay" hidden>
+      <div class="overlay-box">
+        <div class="spinner" aria-hidden="true"></div>
+        <p class="overlay-msg">Network is slow, please check internet connection</p>
+        <p class="overlay-sub" id="netlost-sub">Reconnecting…</p>
+        <button id="netlost-end" class="ghost" hidden>End interview</button>
+      </div>
+    </div>
+
     <script src="renderer.js"></script>
   </body>
 </html>

@@ -217,7 +217,14 @@ backend is needed yet. Swapping in the real backend is one function body.
 ## Failure modes to design for
 
 1. **Network dies mid-interview** — the real one. Local recording continues;
-   the LLM side stops. Decide: resume the session, or end and salvage?
+   the LLM side stops. **Decided:** a full-screen overlay reading "Network is
+   slow, please check internet connection" with a spinner.
+   - `disconnected` — ICE may re-establish on its own, so the spinner is
+     honest here. Overlay clears automatically if it recovers
+   - `failed`, or `disconnected` for longer than 20s — not recoverable
+     without a new handshake. The overlay stops implying recovery and offers
+     to end the interview, keeping what was captured
+   - A spinner that never resolves is worse than an error, hence the bound
 2. **Microphone permission denied** — cannot re-prompt; guide to Settings
 3. **Upload fails** — outbox retries with backoff on reconnect
 4. **App crashes mid-session** — incremental writes mean the session is

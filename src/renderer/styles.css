@@ -85,3 +85,35 @@ button.small { margin-left: auto; padding: 3px 9px; font-size: 12px; }
 .turn .who { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); display: block; margin-bottom: 2px; }
 .turn.assistant { border-left: 2px solid var(--accent); }
 .turn.user { border-left: 2px solid var(--good); }
+
+/* Network-loss overlay --------------------------------------------------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(10, 11, 15, .92);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.overlay[hidden] { display: none; }
+
+.overlay-box {
+  text-align: center; max-width: 380px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+
+.spinner {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  animation: spin 820ms linear infinite;
+}
+.overlay.stalled .spinner {
+  border-top-color: var(--bad);
+  animation-duration: 2.4s;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.overlay-msg { margin: 0; font-size: 15px; font-weight: 600; }
+.overlay-sub { margin: 0; font-size: 12.5px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}

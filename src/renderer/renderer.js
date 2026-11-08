@@ -13,7 +13,10 @@ const el = {
   stop: $('stop'),
   status: $('status'),
   transcript: $('transcript'),
-  clear: $('clear')
+  clear: $('clear'),
+  netlost: $('netlost'),
+  netlostSub: $('netlost-sub'),
+  netlostEnd: $('netlost-end')
 };
 
 // --------------------------------------------------------------------------
@@ -145,6 +148,40 @@ function setStatus (text, kind) {
   el.status.className = 'status' + (kind ? ' ' + kind : '');
 }
 
+// How long 'disconnected' may spin before we stop implying recovery.
+// WebRTC can re-establish from 'disconnected'; it cannot from 'failed'.
+const RECONNECT_GRACE_MS = 20000;
+
+let stallTimer = null;
+
+function showNetworkOverlay (terminal) {
+  clearTimeout(stallTimer);
+  stallTimer = null;
+
+  el.netlost.hidden = false;
+  el.netlost.classList.toggle('stalled', Boolean(terminal));
+
+  if (terminal) {
+    el.netlostSub.textContent =
+      'The session could not be recovered. Everything up to this point is kept.';
+    el.netlostEnd.hidden = false;
+    return;
+  }
+
+  el.netlostSub.textContent = 'Reconnecting…';
+  el.netlostEnd.hidden = true;
+  // Do not spin forever — a spinner that never resolves is worse than an error.
+  stallTimer = setTimeout(() => showNetworkOverlay(true), RECONNECT_GRACE_MS);
+}
+
+function hideNetworkOverlay () {
+  clearTimeout(stallTimer);
+  stallTimer = null;
+  el.netlost.hidden = true;
+  el.netlost.classList.remove('stalled');
+  el.netlostEnd.hidden = true;
+}
+
 const turns = new Map();
 
 function writeTurn (id, who, text, append) {
@@ -216,10 +253,26 @@ async function startSession () {
     dc.addEventListener('close', () => setStatus('Session closed.'));
 
     pc.addEventListener('connectionstatechange', () => {
-      if (pc && (pc.connectionState === 'failed' || pc.connectionState === 'disconnected')) {
-        // This is the failure mode that matters in production: the network
-        // dies mid-interview. Local recording should continue here.
-        setStatus('Connection lost (' + pc.connectionState + ').', 'err');
+      if (!pc) return;
+      switch (pc.connectionState) {
+        case 'connected':
+          hideNetworkOverlay();
+          setStatus('Connected — interview running.', 'live');
+          break;
+
+        // ICE lost the path but may re-establish on its own. This is the
+        // state the spinner is honest about.
+        case 'disconnected':
+          showNetworkOverlay(false);
+          setStatus('Connection interrupted.', 'err');
+          break;
+
+        // Not recoverable without a fresh handshake. Keep the overlay but
+        // stop pretending it is reconnecting.
+        case 'failed':
+          showNetworkOverlay(true);
+          setStatus('Connection failed.', 'err');
+          break;
       }
     });
 
@@ -238,6 +291,7 @@ async function startSession () {
 }
 
 function stopSession () {
+  hideNetworkOverlay();
   dc?.close();
   pc?.close();
   dc = null;
@@ -253,6 +307,11 @@ el.start.addEventListener('click', startSession);
 el.stop.addEventListener('click', () => {
   stopSession();
   setStatus('Interview ended.');
+});
+
+el.netlostEnd.addEventListener('click', () => {
+  stopSession();
+  setStatus('Interview ended after connection loss.', 'err');
 });
 
 el.clear.addEventListener('click', () => {
