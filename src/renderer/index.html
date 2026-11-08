@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; media-src 'self' blob:;"
+    />
+    <title>urchin</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>urchin</h1>
+      <span id="env" class="pill">…</span>
+    </header>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>1 · Microphone &amp; echo cancellation</h2>
+        <span class="hint">No API key needed</span>
+      </div>
+      <p class="lede">
+        Captures the mic and reports what the audio stack actually applied.
+        <strong>echoCancellation: true</strong> is the one that matters — without it
+        the model hears its own voice through the speakers and interrupts itself.
+      </p>
+      <div class="row">
+        <button id="mic-test">Test microphone</button>
+        <button id="mic-stop" class="ghost" disabled>Stop</button>
+        <button id="mic-settings" class="ghost" hidden>Open Settings</button>
+      </div>
+      <div class="meter"><div id="meter-fill"></div></div>
+      <pre id="mic-settings-out" class="out">Not started.</pre>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>2 · Live interview session</h2>
+        <span class="hint">Needs OPENAI_API_KEY</span>
+      </div>
+      <p class="lede">
+        Opens a WebRTC peer connection to the Realtime API. Audio flows directly
+        to OpenAI; only the SDP handshake goes through the main process.
+      </p>
+      <div class="row">
+        <button id="start">Start interview</button>
+        <button id="stop" class="ghost" disabled>End interview</button>
+      </div>
+      <p id="status" class="status">Idle.</p>
+    </section>
+
+    <section class="card grow">
+      <div class="card-head">
+        <h2>Transcript</h2>
+        <button id="clear" class="ghost small">Clear</button>
+      </div>
+      <div id="transcript" class="transcript"><em>Nothing yet.</em></div>
+    </section>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,27 @@
+appId: com.intlabs.urchin
+productName: urchin
+directories:
+  output: dist
+  buildResources: build
+files:
+  - src/**/*
+  - package.json
+
+mac:
+  category: public.app-category.business
+  target: dmg
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # Both files are required. A custom entitlements file REPLACES electron-builder's
+  # defaults rather than merging, so allow-jit must stay present or the signed app
+  # will not launch. The renderer runs in a helper process, which is why
+  # audio-input also has to appear in the inherit file.
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: >-
+      urchin records interview audio so the session can be transcribed and
+      reviewed afterward.
+
+win:
+  target: nsis

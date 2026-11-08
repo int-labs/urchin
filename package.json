@@ -1,0 +1,19 @@
+{
+  "name": "urchin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI interview app — Electron shell with an LLM interviewer over WebRTC",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.9"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}
