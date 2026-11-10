@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('node:path');
+const { mkdir, writeFile } = require('node:fs/promises');
 const {
   app, BrowserWindow, ipcMain, session, shell, systemPreferences
 } = require('electron');
@@ -12,18 +13,8 @@ const INTERVIEWER_PROMPT = require('./interviewer-prompt');
 const MODEL = process.env.URCHIN_MODEL || 'gpt-realtime-2.1';
 const VOICE = process.env.URCHIN_VOICE || 'marin';
 
-// --------------------------------------------------------------------------
-// Backend stand-in.
-//
-// The Realtime API's "unified interface" puts a trusted server in the
-// handshake: the client sends its SDP offer, the server forwards it to OpenAI
-// with the real API key, and returns the SDP answer. No credential ever
-// reaches the renderer.
-//
-// Until the real backend exists, the Electron main process plays that role.
-// When it does exist, replace the body of createSession() with a call to it.
-// Nothing in the renderer changes.
-// --------------------------------------------------------------------------
+// Stands in for the backend. Forwards the renderer's SDP offer to OpenAI
+// using the real key, so no credential ever reaches the renderer.
 async function createSession (sdp) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -58,12 +49,8 @@ async function createSession (sdp) {
   return body; // raw SDP answer
 }
 
-// --------------------------------------------------------------------------
-// macOS microphone permission.
-//
-// On Windows this is a no-op: there is no equivalent gate, which is also why
-// a green run here proves nothing about the macOS path.
-// --------------------------------------------------------------------------
+// Only macOS gates the microphone at OS level. Windows has no equivalent,
+// so this returns early there and proves nothing about the macOS path.
 async function ensureMicAccess () {
   if (process.platform !== 'darwin') {
     return { ok: true, status: 'not-applicable', platform: process.platform };
@@ -72,7 +59,7 @@ async function ensureMicAccess () {
   const status = systemPreferences.getMediaAccessStatus('microphone');
   if (status === 'granted') return { ok: true, status, platform: 'darwin' };
 
-  // macOS will not re-prompt once denied — the user has to be sent to Settings.
+  // macOS never re-prompts once denied, so the caller must open Settings.
   if (status === 'denied' || status === 'restricted') {
     return { ok: false, status, platform: 'darwin' };
   }
@@ -122,6 +109,28 @@ app.whenReady().then(() => {
       throw new Error('An SDP offer is required');
     }
     return createSession(sdp);
+  });
+
+  // Writes both SDP documents to logs/ so a session can be read afterwards.
+  // logs/ is already covered by the *.log rule in .gitignore.
+  ipcMain.handle('debug:logSdp', async (_event, pair) => {
+    const dir = path.join(app.getAppPath(), 'logs');
+    await mkdir(dir, { recursive: true });
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = path.join(dir, `sdp-${stamp}.log`);
+
+    // A null answer means the handshake was rejected. Keep the offer anyway.
+    await writeFile(file, [
+      '=== OFFER (this app) ===',
+      pair.offer,
+      '',
+      '=== ANSWER (OpenAI) ===',
+      pair.answer ?? '(none: handshake failed before an answer was returned)',
+      ''
+    ].join('\n'), 'utf8');
+
+    return file;
   });
 
   ipcMain.handle('app:info', () => ({

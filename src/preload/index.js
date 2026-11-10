@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('urchin', {
   info: () => ipcRenderer.invoke('app:info'),
   ensureMicAccess: () => ipcRenderer.invoke('mic:ensure'),
   openMicSettings: () => ipcRenderer.invoke('mic:openSettings'),
-  createSession: (sdp) => ipcRenderer.invoke('session:create', sdp)
+  createSession: (sdp) => ipcRenderer.invoke('session:create', sdp),
+  logSdp: (pair) => ipcRenderer.invoke('debug:logSdp', pair)
 });

@@ -19,14 +19,8 @@ const el = {
   netlostEnd: $('netlost-end')
 };
 
-// --------------------------------------------------------------------------
-// Microphone capture
-//
-// These constraints are the whole point of keeping capture in the renderer.
-// Chromium's WebRTC stack implements echo cancellation, noise suppression and
-// auto gain. Asking for them is not the same as getting them, which is why we
-// read the settings back and show what was actually applied.
-// --------------------------------------------------------------------------
+// Chromium's WebRTC stack implements these. Asking is not the same as
+// getting, so describeTrack() reads back what was actually applied.
 const AUDIO_CONSTRAINTS = {
   audio: {
     echoCancellation: true,
@@ -135,13 +129,67 @@ el.micStop.addEventListener('click', () => {
 
 el.micSettings.addEventListener('click', () => window.urchin.openMicSettings());
 
-// --------------------------------------------------------------------------
-// Realtime session
-// --------------------------------------------------------------------------
+// Pulls out the lines worth comparing between the two documents.
+function summariseSdp (sdp) {
+  const lines = sdp.split(/\r?\n/);
+  const starting = (prefix) => lines.filter((l) => l.startsWith(prefix));
+
+  return {
+    media: starting('m=')[0] ?? '(none)',
+    codecs: starting('a=rtpmap:').map((l) => l.split(' ')[1]).join(', '),
+    direction: ['a=sendrecv', 'a=sendonly', 'a=recvonly', 'a=inactive']
+      .find((d) => lines.includes(d)) ?? '(unset)',
+    candidates: starting('a=candidate:').length,
+    bytes: sdp.length
+  };
+}
+
+// Prints one SDP document and keeps the console group collapsed.
+function printSdp (label, sdp) {
+  console.groupCollapsed(`[sdp] ${label}`);
+  console.log(sdp);
+  console.groupEnd();
+}
+
+// Writes to logs/ even when answerSdp is null, so a failed handshake still
+// leaves the offer behind as evidence.
+async function logSdpExchange (offerSdp, answerSdp) {
+  const summary = { offer: summariseSdp(offerSdp) };
+  if (answerSdp) summary.answer = summariseSdp(answerSdp);
+  console.table(summary);
+
+  try {
+    const file = await window.urchin.logSdp({
+      offer: offerSdp,
+      answer: answerSdp ?? null
+    });
+    console.log('[sdp] written to', file);
+  } catch (err) {
+    console.warn('[sdp] could not write log file:', err.message);
+  }
+}
+
+// IPC rejections arrive as one long string with the API's JSON inside.
+// Pull out the human sentence so the status line is readable.
+function readableError (err) {
+  const text = String(err?.message ?? err);
+  const brace = text.indexOf('{');
+  if (brace === -1) return text;
+
+  try {
+    const parsed = JSON.parse(text.slice(brace));
+    return parsed?.error?.message ?? text;
+  } catch {
+    return text;
+  }
+}
+
+// --- Realtime session ---
 let pc = null;
 let dc = null;
 let sessionStream = null;
 let audioEl = null;
+let lastOffer = null;
 
 function setStatus (text, kind) {
   el.status.textContent = text;
@@ -170,7 +218,7 @@ function showNetworkOverlay (terminal) {
 
   el.netlostSub.textContent = 'Reconnecting…';
   el.netlostEnd.hidden = true;
-  // Do not spin forever — a spinner that never resolves is worse than an error.
+  // Bound the spinner. One that never resolves is worse than an error.
   stallTimer = setTimeout(() => showNetworkOverlay(true), RECONNECT_GRACE_MS);
 }
 
@@ -235,7 +283,7 @@ async function startSession () {
     setStatus('Negotiating…');
     pc = new RTCPeerConnection();
 
-    // Remote audio — the interviewer's voice.
+    // The remote track carries the interviewer's synthesised voice.
     audioEl = new Audio();
     audioEl.autoplay = true;
     pc.ontrack = (e) => { audioEl.srcObject = e.streams[0]; };
@@ -279,13 +327,24 @@ async function startSession () {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
+    // Printed before the handshake so a rejected session still shows one.
+    lastOffer = offer.sdp;
+    printSdp('offer (this app)', offer.sdp);
+
     // Handshake goes through the main process, which holds the API key.
     const answerSdp = await window.urchin.createSession(offer.sdp);
     await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
 
+    printSdp('answer (OpenAI)', answerSdp);
+    // Fire and forget. Logging must never take the session down.
+    logSdpExchange(offer.sdp, answerSdp);
+
     el.stop.disabled = false;
   } catch (err) {
-    setStatus(String(err.message || err), 'err');
+    // Full error to the console, readable sentence to the status line.
+    console.error('[session] failed to start:', err);
+    setStatus(readableError(err), 'err');
+    if (lastOffer) logSdpExchange(lastOffer, null);
     stopSession();
   }
 }
@@ -319,7 +378,7 @@ el.clear.addEventListener('click', () => {
   el.transcript.innerHTML = '<em>Nothing yet.</em>';
 });
 
-// --------------------------------------------------------------------------
+// Report the environment on load, and block the session without a key.
 window.urchin.info().then((info) => {
   el.env.textContent =
     `${info.platform} · ${info.model} · ${info.hasKey ? 'key loaded' : 'no API key'}`;
